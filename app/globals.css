@@ -1,0 +1,379 @@
+@import "tailwindcss";
+
+/* ============================
+   Design Tokens
+   ============================ */
+:root {
+  /* Colors - Dark Premium Theme */
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+  --accent: #8b8b8b;
+  --accent-light: #c4c4c4;
+  --surface: #141414;
+  
+  /* Typography */
+  --letter-spacing-wide: 0.2em;
+  --letter-spacing-ultra: 0.4em;
+  
+  /* 3D Space */
+  --perspective: 1200px;
+  --perspective-origin: 50% 50%;
+  
+  /* Animation */
+  --transition-smooth: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* ============================
+   Base Styles
+   ============================ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: auto; /* Lenis handles smooth scroll */
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================
+   Scrollytelling Wrapper
+   ============================ */
+.scrollytelling-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ============================
+   Canvas Stage (Fixed Full-Screen)
+   ============================ */
+.canvas-stage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  perspective: var(--perspective);
+  perspective-origin: var(--perspective-origin);
+  transform-style: preserve-3d;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.canvas-stage > * {
+  pointer-events: auto;
+}
+
+/* ============================
+   Grainy Background Layer
+   ============================ */
+.grainy-background {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.grain-texture {
+  position: absolute;
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+  opacity: 0.04;
+  animation: grain 8s steps(10) infinite;
+}
+
+@keyframes grain {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-5%, -10%); }
+  20% { transform: translate(-15%, 5%); }
+  30% { transform: translate(7%, -25%); }
+  40% { transform: translate(-5%, 25%); }
+  50% { transform: translate(-15%, 10%); }
+  60% { transform: translate(15%, 0%); }
+  70% { transform: translate(0%, 15%); }
+  80% { transform: translate(3%, 35%); }
+  90% { transform: translate(-10%, 10%); }
+}
+
+.organic-fiber {
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(ellipse at 20% 30%, rgba(100, 100, 100, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 70%, rgba(80, 80, 80, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(60, 60, 60, 0.02) 0%, transparent 70%);
+}
+
+/* ============================
+   Mid-ground Layer (Text)
+   ============================ */
+.mid-ground {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  transform-style: preserve-3d;
+}
+
+.text-reveal {
+  font-size: clamp(2.5rem, 8vw, 7rem);
+  font-weight: 200;
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+  color: var(--foreground);
+  mix-blend-mode: difference;
+  perspective: 1000px;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.text-reveal-char {
+  display: inline-block;
+  transform-origin: center bottom;
+  will-change: transform, opacity;
+}
+
+.hero-text {
+  font-weight: 100;
+  letter-spacing: var(--letter-spacing-ultra);
+}
+
+/* ============================
+   Foreground Layer (SVG)
+   ============================ */
+.foreground {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transform-style: preserve-3d;
+}
+
+.seed-svg {
+  width: auto;
+  height: 40vh;
+  max-height: 300px;
+  color: var(--foreground);
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.1));
+  will-change: transform, opacity;
+}
+
+.growing-svg-container {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+  opacity: 0;
+}
+
+.growing-svg {
+  width: 150vw;
+  height: auto;
+  color: var(--foreground);
+  filter: drop-shadow(0 0 30px rgba(255, 255, 255, 0.15));
+  mix-blend-mode: difference;
+}
+
+/* ============================
+   Start Button
+   ============================ */
+.start-button {
+  position: absolute;
+  bottom: 15vh;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 20;
+  transition: var(--transition-smooth);
+}
+
+.start-button:hover {
+  transform: translateX(-50%) translateY(-5px);
+}
+
+.start-text {
+  font-size: 0.75rem;
+  font-weight: 300;
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+  color: var(--accent);
+  transition: color 0.3s ease;
+}
+
+.start-button:hover .start-text {
+  color: var(--foreground);
+}
+
+.start-arrow {
+  font-size: 1.5rem;
+  color: var(--accent);
+  animation: bounce 2s ease-in-out infinite;
+  transition: color 0.3s ease;
+}
+
+.start-button:hover .start-arrow {
+  color: var(--foreground);
+}
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(10px);
+  }
+  60% {
+    transform: translateY(5px);
+  }
+}
+
+/* ============================
+   Scroll Content
+   ============================ */
+.scroll-content {
+  position: relative;
+  z-index: 1;
+}
+
+.scroll-spacer {
+  height: 400vh; /* Extended scroll area for animations */
+}
+
+/* ============================
+   Next Section (After Dive)
+   ============================ */
+.next-section {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, var(--background) 0%, var(--surface) 50%, var(--background) 100%);
+  padding: 4rem 2rem;
+}
+
+.next-section-content {
+  text-align: center;
+  max-width: 800px;
+}
+
+.next-title {
+  font-size: clamp(3rem, 10vw, 8rem);
+  font-weight: 100;
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+  background: linear-gradient(135deg, var(--foreground) 0%, var(--accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.next-description {
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  color: var(--accent-light);
+  line-height: 1.8;
+}
+
+/* ============================
+   Responsive Adjustments
+   ============================ */
+@media (max-width: 768px) {
+  .text-reveal {
+    font-size: clamp(1.5rem, 10vw, 3rem);
+    letter-spacing: 0.15em;
+  }
+  
+  .hero-text {
+    letter-spacing: 0.2em;
+  }
+  
+  .seed-svg {
+    height: 30vh;
+    max-height: 200px;
+  }
+  
+  .growing-svg {
+    width: 200vw;
+  }
+  
+  .start-button {
+    bottom: 10vh;
+  }
+  
+  .next-title {
+    letter-spacing: 0.1em;
+  }
+}
+
+/* ============================
+   Utility Classes
+   ============================ */
+.will-change-transform {
+  will-change: transform;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* ============================
+   Selection & Scrollbar
+   ============================ */
+::selection {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--foreground);
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-light);
+}
