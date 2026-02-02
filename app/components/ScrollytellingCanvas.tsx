@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useScroll, useTransform, useMotionValueEvent, useSpring, Variants } from "framer-motion";
+import { motion, useScroll, useTransform, Variants, useSpring } from "framer-motion";
 import LenisProvider from "./LenisProvider";
 
 export default function ScrollytellingCanvas() {
@@ -25,47 +25,7 @@ export default function ScrollytellingCanvas() {
   // Main Path Drawing (Scroll Controlled) - Single continuous path
   const mainPathLength = useTransform(scrollYProgress, [0.1, 0.9], [0, 1]);
 
-  // Main Path Ref for "Follow Line" calculation
-  const pathRef = useRef<SVGPathElement>(null);
 
-  // Camera Follow Springs (Percentages)
-  const cameraX = useSpring(0, { stiffness: 60, damping: 20 });
-  const cameraY = useSpring(0, { stiffness: 60, damping: 20 });
-  const cameraXStr = useTransform(cameraX, (v) => `${v}%`);
-  const cameraYStr = useTransform(cameraY, (v) => `${v}%`);
-
-  // Update Camera Position on Scroll
-  useMotionValueEvent(scrollYProgress, "change", (latest) => {
-    const path = pathRef.current;
-    if (!path) return;
-
-    // Map scroll [0.1, 0.9] to path [0, 1]
-    let progress = (latest - 0.1) / (0.9 - 0.1);
-    // Clamp
-    if (progress < 0) progress = 0;
-    if (progress > 1) progress = 1;
-
-    try {
-      const totalLen = path.getTotalLength();
-      const point = path.getPointAtLength(progress * totalLen);
-
-      // Calculate offset to center the point
-      // ViewBox is 1267 x 832
-      const pX = point.x / 1267; // 0..1
-      const pY = point.y / 832;  // 0..1
-
-      // Desired shift: 
-      // If point is 0 (left), we want to shift +50% to center it.
-      // If point is 1 (right), we want to shift -50% to center it.
-      // Formula: (0.5 - pX) * 100
-
-      cameraX.set((0.5 - pX) * 100);
-      cameraY.set((0.5 - pY) * 100);
-
-    } catch (e) {
-      // Fallback or ignore if path not ready
-    }
-  });
 
   // Parallax Zoom:
   // Starts distant (0.6) and zooms in close (2.5) as the form completes
@@ -112,12 +72,40 @@ export default function ScrollytellingCanvas() {
     },
   };
 
+  // --- Interactive Water Distortion ---
+  // We use mouse coordinates to move a mask
+  const mvX = useSpring(0, { stiffness: 600, damping: 45 });
+  const mvY = useSpring(0, { stiffness: 600, damping: 45 });
+  const radius = useSpring(0, { stiffness: 300, damping: 40 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const scaleX = 1280 / rect.width;
+    const scaleY = 832 / rect.height;
+
+    mvX.set(x * scaleX);
+    mvY.set(y * scaleY);
+    radius.set(90);
+  };
+
+  const handleMouseLeave = () => {
+    radius.set(0);
+  };
+
+
   return (
     <LenisProvider>
       <div ref={containerRef} className="relative w-full h-[500vh] bg-[#0a0a0a] text-[#f5f5f5]">
 
         {/* Sticky Stage */}
-        <div className="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center">
+        <div
+          className="sticky top-0 h-screen w-full overflow-hidden flex items-center justify-center"
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+        >
 
           {/* Background Grain */}
           <div className="absolute inset-0 opacity-10 pointer-events-none">
@@ -174,27 +162,116 @@ export default function ScrollytellingCanvas() {
 
           {/* === MAIN SVG (SCROLL CONTROLLED) === */}
           <motion.div
-            className="relative z-10 w-full max-w-[2000px]"
-            style={{ opacity: mainOpacity, scale: parallaxScale, x: cameraXStr, y: cameraYStr }}
+            className="relative z-10 w-full max-w-[5000px]"
+            style={{ opacity: mainOpacity, scale: parallaxScale }}
+            
           >
             <svg
-              width="867"
-              height="532"
-              viewBox="0 0 1267 832"
+              width="1280"
+              height="832"
+              viewBox="0 0 1280 832"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
               className="w-full h-auto drop-shadow-2xl"
             >
+              <defs>
+                <filter
+                  id="water-distortion"
+                  x="-40%"
+                  y="-40%"
+                  width="180%"
+                  height="180%"
+                  filterUnits="userSpaceOnUse"
+                >
+                  {/* Directional water noise */}
+                  <feTurbulence
+                    type="fractalNoise"
+                    baseFrequency="0.004"
+                    numOctaves="1"
+                    seed="12"
+                    result="noise"
+                  >
+                    <animate
+                      attributeName="baseFrequency"
+                      dur="7s"
+                      values="0.003;0.0045;0.003"
+                      repeatCount="indefinite"
+                    />
+                  </feTurbulence>
+
+                  {/* Preserve energy */}
+                  <feGaussianBlur
+                    in="noise"
+                    stdDeviation="2"
+                    result="sharpNoise"
+                  />
+
+                  {/* STRONG lateral displacement */}
+                  <feDisplacementMap
+                    in="SourceGraphic"
+                    in2="sharpNoise"
+                    scale="500"
+                    xChannelSelector="R"
+                    yChannelSelector="B"
+                  />
+                </filter>
+
+                {/* Mask that HIDES the clean line at cursor (Black spot on White bg) */}
+                <mask id="mask-clean">
+                  <rect width="1280" height="832" fill="white" />
+                  <motion.circle cx={mvX} cy={mvY} r={radius} fill="black" filter="url(#blur-mask)" />
+                </mask>
+
+                {/* Mask that SHOWS the distorted line at cursor (White spot on Black bg) */}
+                <mask id="mask-distort">
+                  <rect width="1280" height="832" fill="black" />
+                  <motion.circle cx={mvX} cy={mvY} r={radius} fill="white" filter="url(#blur-mask)" />
+                </mask> 
+
+                {/* Blur for the mask edges to blend smoothly */}
+                <filter id="blur-mask">
+                  <feGaussianBlur stdDeviation="15" />
+                </filter>
+              </defs>
+              {/* 1. Distorted Path (Only visible at cursor) */}
               <motion.path
-                ref={pathRef}
-                d="M0.321114 601.5C0.321114 601.5 119.563 500.889 208.321 457.5C358.595 384.04 774.195 455.351 628.321 373.5C551.054 330.145 410.321 377.5 404.321 337.5C398.321 297.5 515.132 240.347 580.321 273.5C669.172 318.686 413.51 394.701 444.321 489.5C484.383 612.76 741.908 529.154 764.321 401.5C788.232 265.318 425.321 289.5 444.321 250C463.321 210.5 764.321 194 764.321 250C764.321 306 720.321 515 664.321 537.5C608.321 560 177.083 215.021 312.321 6.00002C436.211 -185.482 820.734 -209.176 896.321 6.00002C971.721 220.64 421.321 314.882 444.321 373.5C467.321 432.118 818.869 473.83 796.321 337.5C779.796 237.585 679.387 172.976 580.321 194C448.38 222.001 423.906 476.732 544.321 537.5C665.649 598.729 813.821 344 796.321 297.5C778.821 251 312.321 205.5 312.321 273.5C312.321 341.5 1350.3 163.877 1260.32 537.5C1227.24 674.854 1182.88 779.499 1052.32 833.5C828.767 925.968 608.321 401.5 608.321 401.5C608.321 401.5 461.008 279.044 496.321 194C536.617 96.9542 684.261 101.941 764.321 170C876.149 265.065 496.321 433.5 496.321 433.5"
+                d="M8 601.5C8 601.5 127.242 500.889 216 457.5C366.274 384.04 781.874 455.351 636 373.5C558.732 330.145 418 377.5 412 337.5C406 297.5 522.81 240.347 588 273.5C676.851 318.686 421.189 394.701 452 489.5C492.062 612.76 749.587 529.154 772 401.5C795.911 265.318 433 289.5 452 250C471 210.5 772 194 772 250C772 306 728 515 672 537.5C616 560 184.762 215.021 320 6.00002C443.89 -185.482 828.412 -209.176 904 6.00002C979.399 220.64 429 314.882 452 373.5C475 432.118 826.547 473.83 804 337.5C787.475 237.585 687.066 172.976 588 194C456.059 222.001 431.585 476.732 552 537.5C673.328 598.729 821.5 344 804 297.5C786.5 251 320 205.5 320 273.5C320 341.5 1357.98 163.877 1268 537.5C1234.92 674.854 1190.55 779.499 1060 833.5C836.446 925.968 781.5 347.5 616 401.5C450.5 455.5 468.687 279.044 504 194C544.296 96.9542 691.94 101.941 772 170C883.828 265.065 504 433.5 504 433.5"
                 stroke="currentColor"
-                strokeWidth="1.5"
+                strokeWidth="1.8"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 fill="none"
                 initial={{ pathLength: 0 }}
                 style={{ pathLength: mainPathLength }}
+                filter="url(#water-distortion)"
+                mask="url(#mask-distort)"
+              />
+
+              {/* <motion.path
+                d="M8 601.5C8 601.5 127.242 500.889 216 457.5C366.274 384.04 781.874 455.351 636 373.5C558.732 330.145 418 377.5 412 337.5C406 297.5 522.81 240.347 588 273.5C676.851 318.686 421.189 394.701 452 489.5C492.062 612.76 749.587 529.154 772 401.5C795.911 265.318 433 289.5 452 250C471 210.5 772 194 772 250C772 306 728 515 672 537.5C616 560 184.762 215.021 320 6.00002C443.89 -185.482 828.412 -209.176 904 6.00002C979.399 220.64 429 314.882 452 373.5C475 432.118 826.547 473.83 804 337.5C787.475 237.585 687.066 172.976 588 194C456.059 222.001 431.585 476.732 552 537.5C673.328 598.729 821.5 344 804 297.5C786.5 251 320 205.5 320 273.5C320 341.5 1357.98 163.877 1268 537.5C1234.92 674.854 1190.55 779.499 1060 833.5C836.446 925.968 781.5 347.5 616 401.5C450.5 455.5 468.687 279.044 504 194C544.296 96.9542 691.94 101.941 772 170C883.828 265.065 504 433.5 504 433.5"
+                stroke="currentColor"
+                strokeWidth="0.8"
+                strokeOpacity="0.35"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+                style={{ pathLength: mainPathLength }}
+                filter="url(#water-distortion)"
+                mask="url(#mask-distort)"
+              /> */}
+
+
+              {/* 2. Clean Path (Hidden at cursor) */}
+              <motion.path
+                d="M8 601.5C8 601.5 127.242 500.889 216 457.5C366.274 384.04 781.874 455.351 636 373.5C558.732 330.145 418 377.5 412 337.5C406 297.5 522.81 240.347 588 273.5C676.851 318.686 421.189 394.701 452 489.5C492.062 612.76 749.587 529.154 772 401.5C795.911 265.318 433 289.5 452 250C471 210.5 772 194 772 250C772 306 728 515 672 537.5C616 560 184.762 215.021 320 6.00002C443.89 -185.482 828.412 -209.176 904 6.00002C979.399 220.64 429 314.882 452 373.5C475 432.118 826.547 473.83 804 337.5C787.475 237.585 687.066 172.976 588 194C456.059 222.001 431.585 476.732 552 537.5C673.328 598.729 821.5 344 804 297.5C786.5 251 320 205.5 320 273.5C320 341.5 1357.98 163.877 1268 537.5C1234.92 674.854 1190.55 779.499 1060 833.5C836.446 925.968 781.5 347.5 616 401.5C450.5 455.5 468.687 279.044 504 194C544.296 96.9542 691.94 101.941 772 170C883.828 265.065 504 433.5 504 433.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+                initial={{ pathLength: 0 }}
+                style={{ pathLength: mainPathLength }}
+                mask="url(#mask-clean)"
               />
             </svg>
           </motion.div>
@@ -236,6 +313,6 @@ export default function ScrollytellingCanvas() {
           </div>
         </div>
       </div>
-    </LenisProvider>
+    </LenisProvider >
   );
 }
